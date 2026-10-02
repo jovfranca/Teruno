@@ -3,11 +3,17 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class SimulationConfig:
+    """Simulation settings; max_population is a computational safety limit.
+
+    It is not an environmental carrying capacity and is not derived from
+    available resources.
+    """
+
     seed: int = 42
     initial_population: int = 30
     ticks: int = 500
     mutation_rate: float = 0.05
-    max_population: int = 500
+    max_population: int = 500  # Computational safety limit, not carrying capacity.
     max_age: int = 80
     report_every: int = 50
 

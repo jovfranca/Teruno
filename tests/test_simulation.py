@@ -1,11 +1,23 @@
 import random
+from contextlib import redirect_stdout
+from io import StringIO
 import unittest
+from unittest.mock import patch
 
 from simulator import Simulation, SimulationConfig
+from simulator.cli import main as cli_main
 from simulator.genetics import Genome
 
 
 class SimulationTests(unittest.TestCase):
+    def test_max_population_defaults_to_500_safety_limit(self) -> None:
+        self.assertEqual(SimulationConfig().max_population, 500)
+
+    def test_cli_accepts_max_population(self) -> None:
+        with patch("sys.argv", ["simulator", "--max-population", "40", "--ticks", "0"]):
+            with redirect_stdout(StringIO()):
+                cli_main()
+
     def test_same_seed_and_configuration_produce_same_result(self) -> None:
         config = SimulationConfig(seed=42, initial_population=12, ticks=80)
         first = Simulation(config).run()

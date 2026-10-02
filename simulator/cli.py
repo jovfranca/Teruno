@@ -33,10 +33,13 @@ def main() -> None:
     parser.add_argument("--population", type=int, default=30)
     parser.add_argument("--ticks", type=int, default=500)
     parser.add_argument("--mutation-rate", type=float, default=0.05)
+    parser.add_argument("--max-population", type=int, default=500,
+                        help="computational safety population limit (default: 500)")
     parser.add_argument("--report-every", type=int, default=50)
     args = parser.parse_args()
     config = SimulationConfig(seed=args.seed, initial_population=args.population,
                               ticks=args.ticks, mutation_rate=args.mutation_rate,
+                              max_population=args.max_population,
                               report_every=args.report_every)
     simulation = Simulation(config)
     print(f"Civilization Simulation | seed {config.seed} | initial population {len(simulation.living)}")
