@@ -1,5 +1,7 @@
 from collections import Counter
+import math
 import random
+import statistics
 from typing import TypedDict
 
 from .config import SimulationConfig
@@ -31,12 +33,15 @@ class Simulation:
         self.rng = random.Random(self.config.seed)
         self.next_id = 1
         self.population = []
-        for _ in range(self.config.initial_population):
-            person = self._new_individual(Genome.random(self.rng), 0)
+        initial_genomes = Genome.stratified_population(self.config.initial_population,
+                                                       self.rng)
+        for genome in initial_genomes:
+            person = self._new_individual(genome, 0)
             person.age = self.rng.randrange(min(self.config.max_age, 10))
             self.population.append(person)
-        self.initial_traits = self.average_traits()
         self.initial_population = len(self.population)
+        self.initial_population_snapshot = self._population_snapshot(self.living)
+        self.last_nonempty_population_snapshot = self.initial_population_snapshot
         self.births = 0
         self.deaths = 0
         self.generations_reached = 0
@@ -103,6 +108,8 @@ class Simulation:
             + self.config.resource_regeneration)
         self.last_actions = actions
         self.history.append(len(self.living))
+        if self.living:
+            self.last_nonempty_population_snapshot = self._population_snapshot(self.living)
 
     @property
     def extinct(self) -> bool:
@@ -144,6 +151,54 @@ class Simulation:
         return {name: sum(person.genome.traits[index] for person in people) / len(people)
                 for index, name in enumerate(TRAIT_NAMES)}
 
+    @staticmethod
+    def _distribution(values: list[float]) -> dict[str, float]:
+        if not values:
+            return {key: 0.0 for key in
+                    ("min", "average", "median", "max", "stdev", "p25", "p75")}
+        ordered = sorted(values)
+
+        def percentile(fraction: float) -> float:
+            position = fraction * (len(ordered) - 1)
+            lower = math.floor(position)
+            upper = math.ceil(position)
+            return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+
+        return {"min": ordered[0], "average": statistics.fmean(ordered),
+                "median": statistics.median(ordered), "max": ordered[-1],
+                "stdev": statistics.pstdev(ordered), "p25": percentile(0.25),
+                "p75": percentile(0.75)}
+
+    @classmethod
+    def _population_snapshot(cls, people: list[Individual]) -> dict[str, object]:
+        trait_stats = {
+            name: cls._distribution([person.genome.traits[index] for person in people])
+            for index, name in enumerate(TRAIT_NAMES)
+        }
+        policy_stats: dict[str, object] = {}
+        for action_index, action in enumerate(("WORK", "EAT", "REPRODUCE")):
+            policy_stats[action] = {
+                "weights": {
+                    f"input_{input_index}": cls._distribution(
+                        [person.genome.weights[action_index][input_index] for person in people])
+                    for input_index in range(4)
+                },
+                "bias": cls._distribution(
+                    [person.genome.biases[action_index] for person in people]),
+            }
+        snapshot: dict[str, object] = {
+            "population": len(people), "traits": trait_stats,
+            "policy": policy_stats,
+        }
+        if len(people) <= 10:
+            snapshot["individuals"] = [
+                {"id": person.id, "generation": person.generation, "age": person.age,
+                 "energy": person.energy, "food": person.food,
+                 "traits": dict(zip(TRAIT_NAMES, person.genome.traits))}
+                for person in people
+            ]
+        return snapshot
+
     def summary(self) -> SimulationSummary:
         people = self.living
         return {
@@ -158,6 +213,10 @@ class Simulation:
             "average_energy": sum(p.energy for p in people) / len(people) if people else 0.0,
             "average_age": sum(p.age for p in people) / len(people) if people else 0.0,
             "average_traits": self.average_traits(),
+            "trait_statistics": self._population_snapshot(people)["traits"],
+            "policy_statistics": self._population_snapshot(people)["policy"],
+            "initial_population_snapshot": self.initial_population_snapshot,
+            "last_nonempty_population_snapshot": self.last_nonempty_population_snapshot,
             "history": tuple(self.history),
             "last_actions": dict(self.last_actions),
             "food_produced": self.food_produced,

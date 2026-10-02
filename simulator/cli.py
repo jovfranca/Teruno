@@ -73,7 +73,33 @@ def main() -> None:
     print(f"Food consumed:      {result['food_consumed']:.1f}")
     print(f"Food per capita:    {result['food_per_capita']:.1f}")
     print(f"Environmental resource: {result['environmental_resource']:.1f} / {config.resource_capacity:.1f}")
-    print("Average traits (beginning -> end)")
-    for name, start in simulation.initial_traits.items():
-        print(f"  {name:16} {start:.3f} -> {result['average_traits'][name]:.3f}")
+    print("Trait distributions (initial -> final; avg [min, max], sd)")
+    initial_traits = result["initial_population_snapshot"]["traits"]
+    final_snapshot = (result["last_nonempty_population_snapshot"]
+                      if result["population"] == 0 else
+                      {"traits": result["trait_statistics"],
+                       "policy": result["policy_statistics"]})
+    final_traits = final_snapshot["traits"]
+    for name in initial_traits:
+        start = initial_traits[name]
+        end = final_traits[name]
+        print(f"  {name:16} {start['average']:.3f} [{start['min']:.2f}, {start['max']:.2f}], "
+              f"sd {start['stdev']:.2f} -> {end['average']:.3f} "
+              f"[{end['min']:.2f}, {end['max']:.2f}], sd {end['stdev']:.2f}")
+    print("Policy parameter average weights by input and bias (initial -> final)")
+    initial_policy = result["initial_population_snapshot"]["policy"]
+    for action, values in final_snapshot["policy"].items():
+        start_values = initial_policy[action]
+        weights = ", ".join(
+            f"{start_values['weights'][key]['average']:+.2f}->{stats['average']:+.2f}"
+            for key, stats in values["weights"].items())
+        print(f"  {action:10} weights [{weights}] bias "
+              f"{start_values['bias']['average']:+.2f}->{values['bias']['average']:+.2f}")
+    if "individuals" in final_snapshot:
+        print("Last living individuals")
+        for person in final_snapshot["individuals"]:
+            traits = ", ".join(f"{name}={value:.2f}"
+                                for name, value in person["traits"].items())
+            print(f"  {person['id']} gen={person['generation']} age={person['age']} "
+                  f"energy={person['energy']:.1f} food={person['food']:.1f} {traits}")
     _print_population_chart(result["history"])

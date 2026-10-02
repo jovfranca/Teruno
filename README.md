@@ -42,6 +42,8 @@ Options:
 
 Food production draws from a shared environmental resource. Work output falls as this resource is depleted, and it regenerates each tick up to its capacity. Food scarcity lowers reproduction success and increases energy loss, which can lead to starvation deaths. The simulation stops early and reports the tick if the population goes extinct. The `--max-population` option remains a computational safety limit rather than an environmental carrying capacity.
 
+Initial genomes use seeded, stratified sampling across trait values, neural-network weights, and biases. Final reports compare initial and surviving-population trait distributions and average policy parameters. If the population goes extinct, these statistics describe the last non-empty population; up to ten remaining individuals are also listed with their traits.
+
 ## Run tests
 
 ```powershell

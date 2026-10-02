@@ -21,22 +21,15 @@ class SimulationTests(unittest.TestCase):
     def test_cli_accepts_resource_configuration(self) -> None:
         with patch("sys.argv", ["simulator", "--resource-capacity", "250",
                                 "--resource-regeneration", "12", "--ticks", "0"]):
-            with patch("simulator.cli.Simulation") as simulation_type:
-                simulation_type.return_value.living = []
-                simulation_type.return_value.initial_population = 0
-                simulation_type.return_value.config = SimulationConfig(initial_population=1)
-                simulation_type.return_value.tick = 0
-                simulation_type.return_value.summary.return_value = {
-                    "population": 0, "births": 0, "deaths": 0, "generations": 0,
-                    "food_produced": 0.0, "food_consumed": 0.0, "food_per_capita": 0.0,
-                    "environmental_resource": 250.0, "average_traits": {}, "history": (),
-                    "tick": 0,
-                }
+            constructed_configs = []
+            def construct(config):
+                constructed_configs.append(config)
+                return Simulation(config)
+            with patch("simulator.cli.Simulation", side_effect=construct):
                 with redirect_stdout(StringIO()):
                     cli_main()
-                config = simulation_type.call_args.args[0]
-                self.assertEqual(config.resource_capacity, 250.0)
-                self.assertEqual(config.resource_regeneration, 12.0)
+                self.assertEqual(constructed_configs[0].resource_capacity, 250.0)
+                self.assertEqual(constructed_configs[0].resource_regeneration, 12.0)
 
     def test_initial_ages_vary_deterministically(self) -> None:
         config = SimulationConfig(seed=17, initial_population=20, ticks=0)
@@ -71,6 +64,60 @@ class SimulationTests(unittest.TestCase):
         first = Simulation(config).run()
         second = Simulation(config).run()
         self.assertEqual(first, second)
+
+    def test_initial_genomes_are_seeded_and_population_stratified(self) -> None:
+        config = SimulationConfig(seed=42, initial_population=100, ticks=0)
+        first = Simulation(config)
+        second = Simulation(config)
+        genomes_a = [person.genome for person in first.living]
+        genomes_b = [person.genome for person in second.living]
+        self.assertEqual(genomes_a, genomes_b)
+        for trait_index in range(4):
+            values = [genome.traits[trait_index] for genome in genomes_a]
+            self.assertGreater(min(values), 0.0)
+            self.assertLess(max(values), 1.0)
+            self.assertGreater(max(values) - min(values), 0.95)
+        for action in range(3):
+            for input_index in range(4):
+                values = [genome.weights[action][input_index] for genome in genomes_a]
+                self.assertGreater(max(values) - min(values), 3.8)
+            biases = [genome.biases[action] for genome in genomes_a]
+            self.assertGreater(max(biases) - min(biases), 3.8)
+
+    def test_initial_space_filling_is_deterministic_for_same_seed_and_size(self) -> None:
+        import random
+        first = Genome.stratified_population(12, random.Random(19))
+        second = Genome.stratified_population(12, random.Random(19))
+        self.assertEqual(first, second)
+
+    def test_trait_statistics_are_correct(self) -> None:
+        stats = Simulation._distribution([0.0, 0.25, 0.5, 0.75, 1.0])
+        self.assertEqual(stats["min"], 0.0)
+        self.assertEqual(stats["max"], 1.0)
+        self.assertEqual(stats["average"], 0.5)
+        self.assertEqual(stats["median"], 0.5)
+        self.assertEqual(stats["p25"], 0.25)
+        self.assertEqual(stats["p75"], 0.75)
+
+    def test_policy_aggregate_statistics_are_deterministic(self) -> None:
+        config = SimulationConfig(seed=31, initial_population=12, ticks=0)
+        first = Simulation(config).summary()["policy_statistics"]
+        second = Simulation(config).summary()["policy_statistics"]
+        self.assertEqual(first, second)
+
+    def test_last_nonempty_statistics_survive_extinction(self) -> None:
+        simulation = Simulation(SimulationConfig(seed=4, initial_population=4,
+                                                 ticks=0, max_age=1))
+        for person in simulation.living:
+            person.age = 0
+        simulation.step()
+        summary = simulation.summary()
+        snapshot = summary["last_nonempty_population_snapshot"]
+        self.assertEqual(summary["population"], 0)
+        self.assertGreater(snapshot["population"], 0)
+        self.assertIn("work_efficiency", snapshot["traits"])
+        self.assertIn("WORK", snapshot["policy"])
+        self.assertIn("individuals", snapshot)
 
     def test_policy_receives_environmental_resource_availability(self) -> None:
         simulation = Simulation(SimulationConfig(initial_population=1, ticks=0,
