@@ -15,6 +15,8 @@ class SimulationSummary(TypedDict):
     deaths: int
     generations: int
     food: float
+    food_per_capita: float
+    environmental_resource: float
     average_energy: float
     average_age: float
     average_traits: dict[str, float]
@@ -36,7 +38,9 @@ class Simulation:
         self.deaths = 0
         self.generations_reached = 0
         self.food_produced = 0.0
+        self.environmental_resource = self.config.resource_capacity
         self.tick = 0
+        self.food_consumed = 0.0
         self.history = [len(self.living)]
         self.last_actions: Counter[str] = Counter()
 
@@ -69,13 +73,16 @@ class Simulation:
             actions[action] += 1
             if action == "WORK":
                 strength, _, _, efficiency = person.genome.traits
-                produced = 3.0 * efficiency * (0.5 + strength)
+                resource_fraction = self.environmental_resource / self.config.resource_capacity
+                produced = 3.0 * efficiency * (0.5 + strength) * resource_fraction
+                self.environmental_resource = max(0.0, self.environmental_resource - produced)
                 person.food += produced
                 self.food_produced += produced
                 person.energy -= 6.0
             elif action == "EAT":
                 consumed = min(person.food, 2.0)
                 person.food -= consumed
+                self.food_consumed += consumed
                 person.energy += consumed * 12.0
             else:
                 self._reproduce(person)
@@ -83,10 +90,15 @@ class Simulation:
 
             person.age += 1
             person.energy -= 1.5 + person.genome.traits[1]
+            if person.food <= 0.0:
+                person.energy -= 4.0
             if person.energy <= 0.0 or person.age >= self.config.max_age:
                 person.alive = False
                 self.deaths += 1
 
+        self.environmental_resource = min(
+            self.config.resource_capacity,
+            self.environmental_resource + self.config.resource_regeneration)
         self.last_actions = actions
         self.history.append(len(self.living))
 
@@ -101,6 +113,8 @@ class Simulation:
             return
         partner = min(eligible, key=lambda person: person.id)
         fertility = (parent.genome.traits[2] + partner.genome.traits[2]) / 2.0
+        food_availability = min(1.0, self.total_food / max(1.0, len(self.living) * 3.0))
+        fertility *= food_availability
         if self.rng.random() > fertility:
             return
         genome = Genome.inherit(parent.genome, partner.genome, self.rng,
@@ -133,12 +147,15 @@ class Simulation:
             "deaths": self.deaths,
             "generations": self.generations_reached,
             "food": self.total_food,
+            "food_per_capita": self.total_food / len(people) if people else 0.0,
+            "environmental_resource": self.environmental_resource,
             "average_energy": sum(p.energy for p in people) / len(people) if people else 0.0,
             "average_age": sum(p.age for p in people) / len(people) if people else 0.0,
             "average_traits": self.average_traits(),
             "history": tuple(self.history),
             "last_actions": dict(self.last_actions),
             "food_produced": self.food_produced,
+            "food_consumed": self.food_consumed,
         }
 
     def run(self) -> dict[str, object]:

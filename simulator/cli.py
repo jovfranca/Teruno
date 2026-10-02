@@ -7,7 +7,9 @@ from .simulation import Simulation
 def _print_report(simulation: Simulation) -> None:
     report = simulation.summary()
     print(f"Tick {report['tick']:>4} | population {report['population']:>4} | "
-          f"food {report['food']:>8.1f} | births {report['births']:>4} | "
+          f"resource {report['environmental_resource']:>7.1f} | "
+          f"food {report['food']:>8.1f} ({report['food_per_capita']:.1f}/person) | "
+          f"births {report['births']:>4} | "
           f"deaths {report['deaths']:>4}")
     actions = report["last_actions"]
     print("  Actions: " + ", ".join(
@@ -55,6 +57,9 @@ def main() -> None:
     print(f"Deaths:             {result['deaths']}")
     print(f"Generations:        {result['generations']}")
     print(f"Food produced:      {result['food_produced']:.1f}")
+    print(f"Food consumed:      {result['food_consumed']:.1f}")
+    print(f"Food per capita:    {result['food_per_capita']:.1f}")
+    print(f"Environmental resource: {result['environmental_resource']:.1f} / {config.resource_capacity:.1f}")
     print("Average traits (beginning -> end)")
     for name, start in simulation.initial_traits.items():
         print(f"  {name:16} {start:.3f} -> {result['average_traits'][name]:.3f}")

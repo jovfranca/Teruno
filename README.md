@@ -1,4 +1,4 @@
-# Teruno
+﻿# Teruno
 
 A deterministic, terminal based civilization simulation written in Python.
 
@@ -36,9 +36,9 @@ Options:
 | `--ticks` | `500` | Number of simulation steps. |
 | `--mutation-rate` | `0.05` | Mutation rate from `0` to `1`. |
 | `--report-every` | `50` | Print a progress report every this many ticks. |
-| `--max-population` | `500` | Computational safety population limit. |
+| `--max-population` | `500` | Computational safety limit on reproduction. |
 
-`--max-population` limits reproduction to keep computation bounded. It is not an environmental carrying capacity and is not currently determined by food or other resources.
+Food production draws from a shared environmental resource. Work output falls as this resource is depleted, and it regenerates by 20 units per tick up to its capacity of 1000. Food scarcity lowers reproduction success and increases energy loss, which can lead to starvation deaths. The `--max-population` option remains a computational safety limit rather than an environmental carrying capacity.
 
 ## Run tests
 

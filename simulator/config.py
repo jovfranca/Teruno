@@ -16,6 +16,8 @@ class SimulationConfig:
     max_population: int = 500  # Computational safety limit, not carrying capacity.
     max_age: int = 80
     report_every: int = 50
+    resource_capacity: float = 1000.0
+    resource_regeneration: float = 20.0
 
     def __post_init__(self) -> None:
         if self.initial_population < 1:
@@ -28,3 +30,7 @@ class SimulationConfig:
             raise ValueError("max_population cannot be smaller than initial_population")
         if self.max_age < 1 or self.report_every < 1:
             raise ValueError("max_age and report_every must be at least 1")
+        if self.resource_capacity <= 0.0:
+            raise ValueError("resource_capacity must be greater than 0")
+        if not 0.0 <= self.resource_regeneration <= self.resource_capacity:
+            raise ValueError("resource_regeneration must be between 0 and resource_capacity")

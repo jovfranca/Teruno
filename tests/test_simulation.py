@@ -24,6 +24,48 @@ class SimulationTests(unittest.TestCase):
         second = Simulation(config).run()
         self.assertEqual(first, second)
 
+    def test_work_production_scales_with_resource_and_resource_regenerates(self) -> None:
+        config = SimulationConfig(seed=8, initial_population=1, ticks=0,
+                                  resource_capacity=100.0, resource_regeneration=1.0)
+        abundant = Simulation(config)
+        scarce = Simulation(config)
+        for simulation in (abundant, scarce):
+            person = simulation.living[0]
+            person.genome = Genome((1.0, 0.0, 0.0, 1.0), ((0.0,) * 4,) * 3,
+                                   (1.0, 0.0, 0.0))
+        scarce.environmental_resource = 10.0
+        with patch("simulator.simulation.choose_action", return_value="WORK"):
+            abundant.step()
+            scarce.step()
+        self.assertLess(scarce.food_produced, abundant.food_produced)
+        self.assertAlmostEqual(abundant.environmental_resource, 96.5)
+        self.assertAlmostEqual(scarce.environmental_resource, 10.55)
+
+    def test_food_scarcity_reduces_reproduction_and_increases_death_pressure(self) -> None:
+        simulation = Simulation(SimulationConfig(seed=11, initial_population=2, ticks=0,
+                                                 resource_regeneration=0.0))
+        parent, partner = simulation.living
+        for person in (parent, partner):
+            person.age = 4
+            person.energy = 80.0
+            person.food = 0.0
+            person.genome = Genome((0.8, 0.5, 1.0, 0.8), ((0.0,) * 4,) * 3,
+                                   (0.0, 0.0, 1.0))
+        simulation._reproduce(parent)
+        self.assertEqual(simulation.births, 0)
+        with patch("simulator.simulation.choose_action", return_value="EAT"):
+            for _ in range(20):
+                simulation.step()
+        self.assertTrue(all(not person.alive for person in (parent, partner)))
+        self.assertEqual(simulation.deaths, 2)
+
+    def test_summary_exposes_resource_and_food_per_capita(self) -> None:
+        simulation = Simulation(SimulationConfig(initial_population=2, ticks=0,
+                                                 resource_capacity=40.0))
+        report = simulation.summary()
+        self.assertEqual(report["environmental_resource"], 40.0)
+        self.assertEqual(report["food_per_capita"], 4.0)
+
     def test_different_seeds_produce_different_initial_populations(self) -> None:
         first = Simulation(SimulationConfig(seed=1, initial_population=8, ticks=0))
         second = Simulation(SimulationConfig(seed=2, initial_population=8, ticks=0))
