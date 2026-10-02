@@ -38,21 +38,34 @@ def main() -> None:
     parser.add_argument("--max-population", type=int, default=500,
                         help="computational safety population limit (default: 500)")
     parser.add_argument("--report-every", type=int, default=50)
+    parser.add_argument("--resource-capacity", type=float, default=1000.0)
+    parser.add_argument("--resource-regeneration", type=float, default=50.0)
     args = parser.parse_args()
     config = SimulationConfig(seed=args.seed, initial_population=args.population,
                               ticks=args.ticks, mutation_rate=args.mutation_rate,
                               max_population=args.max_population,
-                              report_every=args.report_every)
+                              report_every=args.report_every,
+                              resource_capacity=args.resource_capacity,
+                              resource_regeneration=args.resource_regeneration)
     simulation = Simulation(config)
     print(f"Civilization Simulation | seed {config.seed} | initial population {len(simulation.living)}")
     for _ in range(config.ticks):
+        if simulation.extinct:
+            break
         simulation.step()
         if simulation.tick % config.report_every == 0 or simulation.tick == config.ticks:
             _print_report(simulation)
+        if simulation.extinct:
+            print(f"Population extinct at tick {simulation.tick}.")
+            if simulation.tick % config.report_every != 0:
+                _print_report(simulation)
+            break
     result = simulation.summary()
     print("\nFinal summary")
     print(f"Initial population: {simulation.initial_population}")
     print(f"Final population:   {result['population']}")
+    if simulation.extinct:
+        print(f"Extinction tick:    {result['tick']}")
     print(f"Births:             {result['births']}")
     print(f"Deaths:             {result['deaths']}")
     print(f"Generations:        {result['generations']}")

@@ -30,8 +30,11 @@ class Simulation:
         self.config = config or SimulationConfig()
         self.rng = random.Random(self.config.seed)
         self.next_id = 1
-        self.population = [self._new_individual(Genome.random(self.rng), 0)
-                           for _ in range(self.config.initial_population)]
+        self.population = []
+        for _ in range(self.config.initial_population):
+            person = self._new_individual(Genome.random(self.rng), 0)
+            person.age = self.rng.randrange(min(self.config.max_age, 10))
+            self.population.append(person)
         self.initial_traits = self.average_traits()
         self.initial_population = len(self.population)
         self.births = 0
@@ -53,32 +56,30 @@ class Simulation:
     def living(self) -> list[Individual]:
         return [person for person in self.population if person.alive]
 
-    def _inputs(self, person: Individual, global_food: float,
-                population_size: int) -> tuple[float, ...]:
+    def _inputs(self, person: Individual) -> tuple[float, ...]:
         return (min(1.0, person.energy / 100.0),
                 min(1.0, person.food / 20.0),
                 min(1.0, person.age / self.config.max_age),
-                min(1.0, global_food / max(1.0, population_size * 10.0)))
+                self.environmental_resource / self.config.resource_capacity)
 
     def step(self) -> None:
         self.tick += 1
         actions: Counter[str] = Counter()
         actors = tuple(self.living)
-        global_food = sum(person.food for person in actors)
+        resource_fraction = self.environmental_resource / self.config.resource_capacity
+        resource_used = 0.0
         for person in actors:
             if not person.alive:
                 continue
-            action = choose_action(person.genome,
-                                   self._inputs(person, global_food, len(actors)))
+            action = choose_action(person.genome, self._inputs(person))
             actions[action] += 1
             if action == "WORK":
                 strength, _, _, efficiency = person.genome.traits
-                resource_fraction = self.environmental_resource / self.config.resource_capacity
                 produced = 3.0 * efficiency * (0.5 + strength) * resource_fraction
-                self.environmental_resource = max(0.0, self.environmental_resource - produced)
+                resource_used += produced
                 person.food += produced
                 self.food_produced += produced
-                person.energy -= 6.0
+                person.energy -= min(6.0, 1.0 + produced)
             elif action == "EAT":
                 consumed = min(person.food, 2.0)
                 person.food -= consumed
@@ -98,9 +99,14 @@ class Simulation:
 
         self.environmental_resource = min(
             self.config.resource_capacity,
-            self.environmental_resource + self.config.resource_regeneration)
+            max(0.0, self.environmental_resource - resource_used)
+            + self.config.resource_regeneration)
         self.last_actions = actions
         self.history.append(len(self.living))
+
+    @property
+    def extinct(self) -> bool:
+        return not self.living
 
     def _reproduce(self, parent: Individual) -> None:
         if (parent.age < 3 or parent.energy < 35.0 or parent.food < 3.0
@@ -160,5 +166,7 @@ class Simulation:
 
     def run(self) -> dict[str, object]:
         for _ in range(self.config.ticks):
+            if self.extinct:
+                break
             self.step()
         return self.summary()

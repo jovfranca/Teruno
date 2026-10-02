@@ -18,11 +18,78 @@ class SimulationTests(unittest.TestCase):
             with redirect_stdout(StringIO()):
                 cli_main()
 
+    def test_cli_accepts_resource_configuration(self) -> None:
+        with patch("sys.argv", ["simulator", "--resource-capacity", "250",
+                                "--resource-regeneration", "12", "--ticks", "0"]):
+            with patch("simulator.cli.Simulation") as simulation_type:
+                simulation_type.return_value.living = []
+                simulation_type.return_value.initial_population = 0
+                simulation_type.return_value.config = SimulationConfig(initial_population=1)
+                simulation_type.return_value.tick = 0
+                simulation_type.return_value.summary.return_value = {
+                    "population": 0, "births": 0, "deaths": 0, "generations": 0,
+                    "food_produced": 0.0, "food_consumed": 0.0, "food_per_capita": 0.0,
+                    "environmental_resource": 250.0, "average_traits": {}, "history": (),
+                    "tick": 0,
+                }
+                with redirect_stdout(StringIO()):
+                    cli_main()
+                config = simulation_type.call_args.args[0]
+                self.assertEqual(config.resource_capacity, 250.0)
+                self.assertEqual(config.resource_regeneration, 12.0)
+
+    def test_initial_ages_vary_deterministically(self) -> None:
+        config = SimulationConfig(seed=17, initial_population=20, ticks=0)
+        first = Simulation(config)
+        second = Simulation(config)
+        first_ages = [person.age for person in first.living]
+        self.assertEqual(first_ages, [person.age for person in second.living])
+        self.assertGreater(len(set(first_ages)), 1)
+        self.assertTrue(all(0 <= age < 10 for age in first_ages))
+
+    def test_newborn_starts_at_age_zero(self) -> None:
+        simulation = Simulation(SimulationConfig(seed=11, initial_population=3, ticks=0))
+        parent, partner, _ = simulation.living
+        for person in (parent, partner):
+            person.age = 4
+            person.energy = 80.0
+            person.food = 10.0
+            person.genome = Genome((0.8, 0.5, 1.0, 0.8), ((0.0,) * 4,) * 3,
+                                   (0.0, 0.0, 1.0))
+        simulation._reproduce(parent)
+        self.assertEqual(simulation.population[-1].age, 0)
+
+    def test_run_stops_on_extinction_and_keeps_extinction_tick(self) -> None:
+        simulation = Simulation(SimulationConfig(initial_population=1, ticks=20, max_age=1))
+        result = simulation.run()
+        self.assertEqual(result["population"], 0)
+        self.assertEqual(result["tick"], 1)
+        self.assertEqual(len(result["history"]), 2)
+
     def test_same_seed_and_configuration_produce_same_result(self) -> None:
         config = SimulationConfig(seed=42, initial_population=12, ticks=80)
         first = Simulation(config).run()
         second = Simulation(config).run()
         self.assertEqual(first, second)
+
+    def test_policy_receives_environmental_resource_availability(self) -> None:
+        simulation = Simulation(SimulationConfig(initial_population=1, ticks=0,
+                                                 resource_capacity=100.0))
+        person = simulation.living[0]
+        simulation.environmental_resource = 25.0
+        self.assertEqual(simulation._inputs(person)[-1], 0.25)
+
+    def test_starter_policy_work_score_falls_when_resources_are_scarce(self) -> None:
+        genome = Genome((0.5,) * 4, ((0.0, 0.0, 0.0, 1.5),
+                                     (0.0,) * 4, (0.0, 0.0, 0.0, -1.0)),
+                        (0.0, 0.0, -1.0))
+        simulation = Simulation(SimulationConfig(initial_population=1, ticks=0))
+        person = simulation.living[0]
+        abundant_resource = simulation._inputs(person)[-1]
+        simulation.environmental_resource = 0.0
+        scarce_resource = simulation._inputs(person)[-1]
+        self.assertGreater(genome.weights[0][-1] * abundant_resource,
+                           genome.weights[0][-1] * scarce_resource)
 
     def test_work_production_scales_with_resource_and_resource_regenerates(self) -> None:
         config = SimulationConfig(seed=8, initial_population=1, ticks=0,
@@ -61,7 +128,8 @@ class SimulationTests(unittest.TestCase):
 
     def test_summary_exposes_resource_and_food_per_capita(self) -> None:
         simulation = Simulation(SimulationConfig(initial_population=2, ticks=0,
-                                                 resource_capacity=40.0))
+                                                 resource_capacity=40.0,
+                                                 resource_regeneration=10.0))
         report = simulation.summary()
         self.assertEqual(report["environmental_resource"], 40.0)
         self.assertEqual(report["food_per_capita"], 4.0)

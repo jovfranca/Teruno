@@ -17,7 +17,7 @@ class SimulationConfig:
     max_age: int = 80
     report_every: int = 50
     resource_capacity: float = 1000.0
-    resource_regeneration: float = 20.0
+    resource_regeneration: float = 50.0
 
     def __post_init__(self) -> None:
         if self.initial_population < 1:

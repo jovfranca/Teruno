@@ -18,10 +18,10 @@ class Genome:
     def random(cls, rng: random.Random) -> "Genome":
         # Small seeded variation around a resource-aware starter policy keeps
         # the initial population viable while leaving room for evolution.
-        starter_weights = ((0.0, -0.8, 0.1, 0.0),
-                           (-1.0, 1.0, 0.0, 0.0),
-                           (0.7, 0.5, 0.1, 0.0))
-        starter_biases = (0.25, -0.1, -0.8)
+        starter_weights = ((0.0, -1.5, 0.0, 1.5),
+                           (-3.0, 2.0, 0.0, 0.0),
+                           (0.8, 0.5, 0.0, -1.0))
+        starter_biases = (0.0, -0.2, -1.0)
         return cls(
             traits=tuple(rng.random() for _ in TRAIT_NAMES),
             weights=tuple(

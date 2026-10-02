@@ -37,8 +37,10 @@ Options:
 | `--mutation-rate` | `0.05` | Mutation rate from `0` to `1`. |
 | `--report-every` | `50` | Print a progress report every this many ticks. |
 | `--max-population` | `500` | Computational safety limit on reproduction. |
+| `--resource-capacity` | `1000` | Maximum level of the shared environmental resource. |
+| `--resource-regeneration` | `50` | Resource restored per tick. |
 
-Food production draws from a shared environmental resource. Work output falls as this resource is depleted, and it regenerates by 20 units per tick up to its capacity of 1000. Food scarcity lowers reproduction success and increases energy loss, which can lead to starvation deaths. The `--max-population` option remains a computational safety limit rather than an environmental carrying capacity.
+Food production draws from a shared environmental resource. Work output falls as this resource is depleted, and it regenerates each tick up to its capacity. Food scarcity lowers reproduction success and increases energy loss, which can lead to starvation deaths. The simulation stops early and reports the tick if the population goes extinct. The `--max-population` option remains a computational safety limit rather than an environmental carrying capacity.
 
 ## Run tests
 
